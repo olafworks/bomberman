@@ -5,6 +5,7 @@ import math
 
 # 初期化
 pygame.init()
+pygame.mixer.init()  # 音声機能の初期化
 
 # 画面設定
 SCREEN_WIDTH = 800
@@ -12,6 +13,19 @@ SCREEN_HEIGHT = 600
 TILE_SIZE = 40
 GRID_WIDTH = SCREEN_WIDTH // TILE_SIZE
 GRID_HEIGHT = SCREEN_HEIGHT // TILE_SIZE
+
+# 音声ファイルの読み込み
+try:
+    # 効果音
+    bomb_place_sound = pygame.mixer.Sound("sounds/bomb_place.mp3")
+    bomb_explosion_sound = pygame.mixer.Sound("sounds/explosion.mp3")
+    # 音量調整
+    bomb_place_sound.set_volume(0.5)
+    bomb_explosion_sound.set_volume(0.7)
+    sound_enabled = True
+except:
+    print("音声ファイルの読み込みに失敗しました。ゲームは音なしで続行します。")
+    sound_enabled = False
 
 # 色の定義
 BLACK = (0, 0, 0)
@@ -522,6 +536,8 @@ class Player:
             bomb = Bomb(self.grid_x, self.grid_y, self.bomb_range)
             self.bombs.append(bomb)
             game_map[self.grid_y][self.grid_x] = BOMB
+            if sound_enabled:
+                bomb_place_sound.play()
             return bomb
         return None
 
@@ -698,6 +714,8 @@ def check_explosion(bomb, game_map, player, enemies):
     
     bomb.explosions = explosions
     bomb.exploded = True
+    if sound_enabled:
+        bomb_explosion_sound.play()
     return explosions
 
 def draw_game_info(player, stage):
