@@ -28,6 +28,10 @@ DARK_GRAY = (64, 64, 64)
 STONE_COLOR = (120, 120, 120)
 BRICK_COLOR = (139, 69, 19)
 BRICK_LINES = (101, 51, 14)
+# 肌色を追加
+SKIN_COLOR = (255, 220, 177)
+ORANGE = (255, 165, 0)
+PINK = (255, 192, 203)
 # 爆弾と爆発の色を追加
 BOMB_COLOR = (30, 30, 30)
 BOMB_HIGHLIGHT = (60, 60, 60)
@@ -61,6 +65,11 @@ BOMB_UP = 6
 ENEMY_SLIME = 0
 ENEMY_CHASER = 1
 ENEMY_SMART = 2
+
+# ゲームの状態
+MENU = 0
+GAME = 1
+GAME_OVER = 2
 
 class Bomb:
     def __init__(self, x, y, range=2):
@@ -413,10 +422,72 @@ class Player:
         self.speed_level = 1
         self.alive = True
         self.score = 0
+        # キャラクタータイプは常にロボット
+        self.character_type = 2
 
     def draw(self):
         if self.alive:
-            pygame.draw.rect(screen, GREEN, (self.x, self.y, self.size, self.size))
+            self.draw_robot()
+    
+    def draw_robot(self):
+        # 基本的な体（メタリックな四角形）- 背景は透明
+        center_x = self.x + self.size // 2
+        center_y = self.y + self.size // 2
+        
+        # 頭部（丸い形）
+        head_size = self.size // 3
+        head_x = self.x + self.size // 2
+        head_y = self.y + head_size
+        pygame.draw.circle(screen, DARK_GRAY, (head_x, head_y), head_size)
+        
+        # 目（光るLED）
+        eye_size = 3
+        pygame.draw.circle(screen, BLUE, (head_x - 5, head_y - 2), eye_size)
+        pygame.draw.circle(screen, BLUE, (head_x + 5, head_y - 2), eye_size)
+        
+        # アンテナ
+        antenna_top = (head_x, self.y + 2)
+        pygame.draw.line(screen, BLACK, (head_x, head_y - head_size), antenna_top, 2)
+        pygame.draw.circle(screen, RED, antenna_top, 3)
+        
+        # 胴体（透明な背景に金属パーツ）
+        # 胸部プレート
+        chest_rect = pygame.Rect(self.x + 8, self.y + self.size // 2 - 5, 
+                               self.size - 16, self.size // 4)
+        pygame.draw.rect(screen, GRAY, chest_rect)
+        
+        # 腕（左右）
+        arm_width = 4
+        # 左腕
+        pygame.draw.line(screen, GRAY, 
+                       (self.x + 8, self.y + self.size // 2), 
+                       (self.x + 2, self.y + self.size // 2 + 10), 
+                       arm_width)
+        # 右腕
+        pygame.draw.line(screen, GRAY, 
+                       (self.x + self.size - 8, self.y + self.size // 2), 
+                       (self.x + self.size - 2, self.y + self.size // 2 + 10), 
+                       arm_width)
+        
+        # 脚（左右）
+        leg_width = 5
+        # 左脚
+        pygame.draw.line(screen, GRAY, 
+                       (self.x + self.size // 3, self.y + 3 * self.size // 4), 
+                       (self.x + self.size // 4, self.y + self.size - 2), 
+                       leg_width)
+        # 右脚
+        pygame.draw.line(screen, GRAY, 
+                       (self.x + 2 * self.size // 3, self.y + 3 * self.size // 4), 
+                       (self.x + 3 * self.size // 4, self.y + self.size - 2), 
+                       leg_width)
+        
+        # ボタンやライト
+        for i in range(3):
+            light_x = self.x + 12 + i * 8
+            light_y = self.y + self.size // 2 + 5
+            light_color = random.choice([RED, GREEN, YELLOW, BLUE]) if random.random() > 0.7 else GREEN
+            pygame.draw.circle(screen, light_color, (light_x, light_y), 2)
 
     def move(self, dx, dy, game_map):
         if not self.alive or self.move_cooldown > 0:
@@ -656,6 +727,193 @@ def stage_clear_screen(stage):
     text = font.render(f"STAGE {stage} CLEAR! - Press SPACE to continue", True, WHITE)
     text_rect = text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
     screen.blit(text, text_rect)
+
+def main():
+    # ゲームの状態
+    game_state = MENU
+    
+    # ゲーム変数
+    stage = 1
+    score = 0
+    
+    # メインループ
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            
+            # メニュー画面の処理
+            if game_state == MENU:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        # ゲーム開始
+                        game_map = create_map(stage)
+                        player = Player(TILE_SIZE, TILE_SIZE)
+                        enemies = []
+                        
+                        # ステージに応じた敵の生成
+                        num_enemies = stage + 2
+                        for _ in range(num_enemies):
+                            enemy_type = random.randint(0, min(2, (stage - 1)))
+                            spawn_enemy(enemies, game_map, player, enemy_type)
+                        
+                        game_state = GAME
+            
+            # ゲームプレイ中の処理
+            elif game_state == GAME:
+                # 既存のゲームプレイ処理
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        bomb = player.place_bomb(game_map)
+                        if bomb:
+                            game_map[bomb.y][bomb.x] = BOMB
+            
+            # ゲームオーバー画面の処理
+            elif game_state == GAME_OVER:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        game_state = MENU
+        
+        # 画面クリア
+        screen.fill(BLACK)
+        
+        # メニュー画面の描画
+        if game_state == MENU:
+            draw_menu()
+        
+        # ゲームプレイ中の描画と更新
+        elif game_state == GAME:
+            # プレイヤーの入力処理
+            keys = pygame.key.get_pressed()
+            if player.alive and player.move_cooldown <= 0:
+                if keys[pygame.K_UP]:
+                    player.move(0, -1, game_map)
+                elif keys[pygame.K_DOWN]:
+                    player.move(0, 1, game_map)
+                elif keys[pygame.K_LEFT]:
+                    player.move(-1, 0, game_map)
+                elif keys[pygame.K_RIGHT]:
+                    player.move(1, 0, game_map)
+            
+            # 敵の移動
+            for enemy in enemies:
+                if enemy.move_cooldown <= 0:
+                    if enemy.enemy_type == 0:  # スライム（ランダム移動）
+                        enemy.move_slime(game_map)
+                    elif enemy.enemy_type == 1:  # チェイサー（追跡）
+                        enemy.move_chaser(game_map, player)
+                    elif enemy.enemy_type == 2:  # スマート（爆弾回避）
+                        enemy.move_smart(game_map, player, player.bombs if player.alive else None)
+                enemy.move_cooldown = max(0, enemy.move_cooldown - 1)
+            
+            # プレイヤーのクールダウン更新
+            if player.move_cooldown > 0:
+                player.move_cooldown -= 1
+            
+            # 爆弾の更新
+            for bomb in player.bombs[:]:
+                bomb.update()
+                if bomb.exploded and not bomb.explosions:
+                    # 爆発の処理
+                    explosions = check_explosion(bomb, game_map, player, enemies)
+                    game_map[bomb.y][bomb.x] = EMPTY
+                # 爆発後のエフェクト表示期間が終了したら削除
+                if bomb.exploded and bomb.explosion_frames >= bomb.explosion_duration:
+                    player.bombs.remove(bomb)
+            
+            # 敵との衝突判定
+            if player.alive:
+                for enemy in enemies:
+                    if (player.grid_x == enemy.grid_x and 
+                        player.grid_y == enemy.grid_y):
+                        player.alive = False
+                        game_state = GAME_OVER
+            
+            # すべての敵を倒したらステージクリア
+            if not enemies and player.alive:
+                stage += 1
+                game_map = create_map(stage)
+                player.grid_x = 1
+                player.grid_y = 1
+                player.x = player.grid_x * TILE_SIZE
+                player.y = player.grid_y * TILE_SIZE
+                
+                # 新しいステージの敵を生成
+                num_enemies = stage + 2
+                for _ in range(num_enemies):
+                    enemy_type = random.randint(0, min(2, (stage - 1)))
+                    spawn_enemy(enemies, game_map, player, enemy_type)
+            
+            # マップの描画
+            draw_map(game_map)
+            
+            # 爆弾の描画
+            for bomb in player.bombs:
+                bomb.draw()
+            
+            # 敵の描画
+            for enemy in enemies:
+                enemy.draw()
+            
+            # プレイヤーの描画
+            player.draw()
+            
+            # スコアとステージ情報の表示
+            font = pygame.font.SysFont(None, 36)
+            score_text = font.render(f"Score: {player.score}", True, WHITE)
+            stage_text = font.render(f"Stage: {stage}", True, WHITE)
+            screen.blit(score_text, (10, 10))
+            screen.blit(stage_text, (SCREEN_WIDTH - 150, 10))
+            
+            # プレイヤーのステータス表示
+            bomb_text = font.render(f"Bombs: {player.max_bombs}", True, WHITE)
+            range_text = font.render(f"Range: {player.bomb_range}", True, WHITE)
+            speed_text = font.render(f"Speed: {player.speed_level}", True, WHITE)
+            screen.blit(bomb_text, (10, SCREEN_HEIGHT - 90))
+            screen.blit(range_text, (10, SCREEN_HEIGHT - 60))
+            screen.blit(speed_text, (10, SCREEN_HEIGHT - 30))
+        
+        # ゲームオーバー画面の描画
+        elif game_state == GAME_OVER:
+            draw_game_over(player.score)
+        
+        # 画面更新
+        pygame.display.flip()
+        pygame.time.Clock().tick(60)
+
+def draw_menu():
+    # タイトル
+    font_large = pygame.font.SysFont(None, 72)
+    font_small = pygame.font.SysFont(None, 36)
+    
+    title = font_large.render("ボンバーマン", True, WHITE)
+    instruction = font_small.render("ENTERキーでスタート", True, WHITE)
+    
+    # ロボットキャラクターの表示
+    robot_player = Player(SCREEN_WIDTH // 2 - TILE_SIZE // 2, SCREEN_HEIGHT // 2)
+    robot_player.draw()
+    
+    # テキスト表示
+    screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, SCREEN_HEIGHT // 3))
+    screen.blit(instruction, (SCREEN_WIDTH // 2 - instruction.get_width() // 2, SCREEN_HEIGHT // 2 + 50))
+    
+    # ロボットの説明
+    robot_desc = font_small.render("ロボットキャラクターで爆弾を設置しよう！", True, BLUE)
+    screen.blit(robot_desc, (SCREEN_WIDTH // 2 - robot_desc.get_width() // 2, SCREEN_HEIGHT // 2 + 100))
+
+def draw_game_over(score):
+    # ゲームオーバー表示
+    font_large = pygame.font.SysFont(None, 72)
+    font_small = pygame.font.SysFont(None, 36)
+    
+    game_over = font_large.render("GAME OVER", True, RED)
+    score_text = font_small.render(f"Score: {score}", True, WHITE)
+    instruction = font_small.render("Press ENTER to Continue", True, WHITE)
+    
+    screen.blit(game_over, (SCREEN_WIDTH // 2 - game_over.get_width() // 2, SCREEN_HEIGHT // 3))
+    screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, SCREEN_HEIGHT // 2))
+    screen.blit(instruction, (SCREEN_WIDTH // 2 - instruction.get_width() // 2, SCREEN_HEIGHT // 2 + 50))
 
 # ゲーム状態
 current_stage = 1
