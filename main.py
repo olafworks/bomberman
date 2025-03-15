@@ -57,6 +57,11 @@ POWER_UP = 4
 SPEED_UP = 5
 BOMB_UP = 6
 
+# 敵の種類を定義
+ENEMY_SLIME = 0
+ENEMY_CHASER = 1
+ENEMY_SMART = 2
+
 class Bomb:
     def __init__(self, x, y, range=2):
         self.x = x
@@ -146,26 +151,160 @@ class Bomb:
             screen.blit(explosion_surface, (0, 0))
 
 class Enemy:
-    def __init__(self, x, y):
+    def __init__(self, x, y, enemy_type=ENEMY_SLIME):
         self.grid_x = x
         self.grid_y = y
         self.x = x * TILE_SIZE
         self.y = y * TILE_SIZE
         self.size = TILE_SIZE
         self.move_cooldown = 0
-        self.move_delay = 30
+        self.enemy_type = enemy_type
+        
+        # 敵の種類に応じたパラメータ設定
+        if enemy_type == ENEMY_SLIME:
+            self.color = (0, 100, 255)  # 青色のスライム
+            self.move_delay = 40  # ゆっくり移動
+        elif enemy_type == ENEMY_CHASER:
+            self.color = (220, 50, 50)  # 赤色の追跡者
+            self.move_delay = 25  # 中程度の速さ
+        elif enemy_type == ENEMY_SMART:
+            self.color = (50, 180, 50)  # 緑色の賢い敵
+            self.move_delay = 20  # やや速い
+        
         self.direction = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0)])
+        self.bounce_offset = 0
+        self.bounce_speed = 0.01
+        self.eye_size = TILE_SIZE // 6
 
     def draw(self):
-        pygame.draw.rect(screen, BLUE, (self.x, self.y, self.size, self.size))
+        if self.enemy_type == ENEMY_SLIME:
+            self.draw_slime()
+        elif self.enemy_type == ENEMY_CHASER:
+            self.draw_chaser()
+        elif self.enemy_type == ENEMY_SMART:
+            self.draw_smart()
 
-    def move(self, game_map):
+    def draw_slime(self):
+        # 跳ねるアニメーション
+        self.bounce_offset = math.sin(pygame.time.get_ticks() * self.bounce_speed) * 5
+        
+        # スライムの体（円）
+        center_x = self.x + TILE_SIZE // 2
+        center_y = self.y + TILE_SIZE // 2 + self.bounce_offset
+        radius = TILE_SIZE // 2 - 2
+        
+        # スライムの体を描画
+        pygame.draw.circle(screen, self.color, (center_x, center_y), radius)
+        
+        # スライムの目（白い部分）
+        eye_offset_x = 3
+        eye_offset_y = -2 + self.bounce_offset // 2
+        pygame.draw.circle(screen, WHITE, 
+                         (center_x - eye_offset_x, center_y + eye_offset_y), 
+                         self.eye_size)
+        pygame.draw.circle(screen, WHITE, 
+                         (center_x + eye_offset_x, center_y + eye_offset_y), 
+                         self.eye_size)
+        
+        # 瞳（黒い部分）
+        pupil_size = self.eye_size // 2
+        pygame.draw.circle(screen, BLACK, 
+                         (center_x - eye_offset_x, center_y + eye_offset_y), 
+                         pupil_size)
+        pygame.draw.circle(screen, BLACK, 
+                         (center_x + eye_offset_x, center_y + eye_offset_y), 
+                         pupil_size)
+        
+        # スライムの口
+        mouth_y = center_y + self.eye_size + 2
+        pygame.draw.arc(screen, (0, 50, 200), 
+                      [center_x - self.eye_size, mouth_y, 
+                       self.eye_size * 2, self.eye_size], 
+                      0, math.pi, 2)
+
+    def draw_chaser(self):
+        # 追跡者の体（四角形）
+        rect = pygame.Rect(self.x, self.y, TILE_SIZE, TILE_SIZE)
+        pygame.draw.rect(screen, self.color, rect)
+        
+        # 目（怒った表情）
+        eye_size = self.eye_size
+        eye_y = self.y + TILE_SIZE // 3
+        left_eye_x = self.x + TILE_SIZE // 3 - 2
+        right_eye_x = self.x + 2 * TILE_SIZE // 3 + 2
+        
+        # 白目
+        pygame.draw.circle(screen, WHITE, (left_eye_x, eye_y), eye_size)
+        pygame.draw.circle(screen, WHITE, (right_eye_x, eye_y), eye_size)
+        
+        # 黒目（プレイヤーを見る方向に少しずらす）
+        pupil_offset = 2
+        pygame.draw.circle(screen, BLACK, (left_eye_x + pupil_offset, eye_y), eye_size // 2)
+        pygame.draw.circle(screen, BLACK, (right_eye_x + pupil_offset, eye_y), eye_size // 2)
+        
+        # 口（怒った表情）
+        mouth_y = self.y + 2 * TILE_SIZE // 3
+        pygame.draw.line(screen, BLACK, 
+                       (self.x + TILE_SIZE // 3, mouth_y), 
+                       (self.x + 2 * TILE_SIZE // 3, mouth_y), 
+                       2)
+
+    def draw_smart(self):
+        # 賢い敵の体（三角形）
+        center_x = self.x + TILE_SIZE // 2
+        center_y = self.y + TILE_SIZE // 2
+        
+        # 三角形の頂点
+        triangle_points = [
+            (center_x, self.y + 5),  # 上
+            (self.x + 5, self.y + TILE_SIZE - 5),  # 左下
+            (self.x + TILE_SIZE - 5, self.y + TILE_SIZE - 5)  # 右下
+        ]
+        
+        # 三角形の体を描画
+        pygame.draw.polygon(screen, self.color, triangle_points)
+        
+        # 目（賢そうな表情）
+        eye_y = self.y + TILE_SIZE // 3
+        left_eye_x = self.x + TILE_SIZE // 3
+        right_eye_x = self.x + 2 * TILE_SIZE // 3
+        
+        # 白目
+        pygame.draw.circle(screen, WHITE, (left_eye_x, eye_y), self.eye_size)
+        pygame.draw.circle(screen, WHITE, (right_eye_x, eye_y), self.eye_size)
+        
+        # 黒目（細い目）
+        pygame.draw.ellipse(screen, BLACK, 
+                          [left_eye_x - self.eye_size//2, eye_y - self.eye_size//4, 
+                           self.eye_size, self.eye_size//2])
+        pygame.draw.ellipse(screen, BLACK, 
+                          [right_eye_x - self.eye_size//2, eye_y - self.eye_size//4, 
+                           self.eye_size, self.eye_size//2])
+        
+        # 口（微笑み）
+        mouth_y = self.y + 2 * TILE_SIZE // 3
+        pygame.draw.arc(screen, BLACK, 
+                      [center_x - self.eye_size * 1.5, mouth_y - self.eye_size, 
+                       self.eye_size * 3, self.eye_size * 2], 
+                      0, math.pi, 2)
+
+    def move(self, game_map, player=None, bombs=None):
         if self.move_cooldown > 0:
             self.move_cooldown -= 1
             return
 
+        if self.enemy_type == ENEMY_SLIME:
+            self.move_slime(game_map)
+        elif self.enemy_type == ENEMY_CHASER:
+            self.move_chaser(game_map, player)
+        elif self.enemy_type == ENEMY_SMART:
+            self.move_smart(game_map, player, bombs)
+
+        self.move_cooldown = self.move_delay
+
+    def move_slime(self, game_map):
         # ランダムに方向を変更する可能性
-        if random.random() < 0.1:
+        if random.random() < 0.2:  # 20%の確率で方向転換
             self.direction = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0)])
 
         dx, dy = self.direction
@@ -184,7 +323,79 @@ class Enemy:
             # 壁にぶつかったら方向転換
             self.direction = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0)])
 
-        self.move_cooldown = self.move_delay
+    def move_chaser(self, game_map, player):
+        if player is None:
+            self.move_slime(game_map)
+            return
+            
+        # プレイヤーの方向を計算
+        dx = 1 if player.grid_x > self.grid_x else -1 if player.grid_x < self.grid_x else 0
+        dy = 1 if player.grid_y > self.grid_y else -1 if player.grid_y < self.grid_y else 0
+        
+        # 70%の確率でプレイヤーの方向に移動
+        if random.random() < 0.7:
+            # 水平か垂直のどちらかをランダムに選択
+            if random.choice([True, False]) and dx != 0:
+                self.try_move(dx, 0, game_map)
+            elif dy != 0:
+                self.try_move(0, dy, game_map)
+        else:
+            # ランダムな方向に移動
+            direction = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0)])
+            self.try_move(direction[0], direction[1], game_map)
+
+    def move_smart(self, game_map, player, bombs):
+        if player is None or bombs is None or len(bombs) == 0:
+            self.move_chaser(game_map, player)
+            return
+            
+        # 爆弾からの逃避行動
+        for bomb in bombs:
+            # 爆発範囲内にいるかチェック
+            in_danger = False
+            bomb_range = bomb.range
+            
+            # 水平方向の爆発範囲チェック
+            if self.grid_y == bomb.y and abs(self.grid_x - bomb.x) <= bomb_range:
+                in_danger = True
+            # 垂直方向の爆発範囲チェック
+            elif self.grid_x == bomb.x and abs(self.grid_y - bomb.y) <= bomb_range:
+                in_danger = True
+                
+            if in_danger:
+                # 安全な方向に逃げる
+                safe_directions = []
+                for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                    new_x = self.grid_x + dx
+                    new_y = self.grid_y + dy
+                    if (0 <= new_x < GRID_WIDTH and 0 <= new_y < GRID_HEIGHT and
+                        game_map[new_y][new_x] == EMPTY and
+                        not (new_y == bomb.y and abs(new_x - bomb.x) <= bomb_range) and
+                        not (new_x == bomb.x and abs(new_y - bomb.y) <= bomb_range)):
+                        safe_directions.append((dx, dy))
+                
+                if safe_directions:
+                    dx, dy = random.choice(safe_directions)
+                    if self.try_move(dx, dy, game_map):
+                        return
+        
+        # 危険がなければプレイヤーを追いかける（ChaserEnemyと同様）
+        self.move_chaser(game_map, player)
+
+    def try_move(self, dx, dy, game_map):
+        new_grid_x = self.grid_x + dx
+        new_grid_y = self.grid_y + dy
+
+        if (0 <= new_grid_x < GRID_WIDTH and 
+            0 <= new_grid_y < GRID_HEIGHT and
+            game_map[new_grid_y][new_grid_x] == EMPTY):
+            
+            self.grid_x = new_grid_x
+            self.grid_y = new_grid_y
+            self.x = self.grid_x * TILE_SIZE
+            self.y = self.grid_y * TILE_SIZE
+            return True
+        return False
 
 class Player:
     def __init__(self, x, y):
@@ -449,7 +660,31 @@ def stage_clear_screen(stage):
 current_stage = 1
 game_map = create_map(current_stage)
 player = Player(TILE_SIZE, TILE_SIZE)
-enemies = [Enemy(GRID_WIDTH-2, GRID_HEIGHT-2)]
+enemies = []
+
+# 敵の生成（ステージに応じて種類と数を変更）
+num_slimes = max(1, current_stage)
+num_chasers = max(0, current_stage - 1)
+num_smart = max(0, current_stage - 2)
+
+# スライム型敵の配置
+for _ in range(num_slimes):
+    x = random.randint(GRID_WIDTH//2, GRID_WIDTH-2)
+    y = random.randint(1, GRID_HEIGHT-2)
+    enemies.append(Enemy(x, y, ENEMY_SLIME))
+
+# 追跡型敵の配置（ステージ2以降）
+for _ in range(num_chasers):
+    x = random.randint(GRID_WIDTH//2, GRID_WIDTH-2)
+    y = random.randint(GRID_HEIGHT//2, GRID_HEIGHT-2)
+    enemies.append(Enemy(x, y, ENEMY_CHASER))
+
+# 爆弾回避型敵の配置（ステージ3以降）
+for _ in range(num_smart):
+    x = random.randint(1, GRID_WIDTH-2)
+    y = random.randint(GRID_HEIGHT//2, GRID_HEIGHT-2)
+    enemies.append(Enemy(x, y, ENEMY_SMART))
+
 game_state = "playing"  # "playing", "game_over", "stage_clear"
 
 # メインゲームループ
@@ -470,14 +705,38 @@ while running:
                     current_stage = 1
                     game_map = create_map(current_stage)
                     player = Player(TILE_SIZE, TILE_SIZE)
-                    enemies = [Enemy(GRID_WIDTH-2, GRID_HEIGHT-2)]
+                    enemies = []
                     game_state = "playing"
                 elif game_state == "stage_clear":
                     # 次のステージへ
                     current_stage += 1
                     game_map = create_map(current_stage)
                     player = Player(TILE_SIZE, TILE_SIZE)
-                    enemies = [Enemy(GRID_WIDTH-2, GRID_HEIGHT-2) for _ in range(current_stage)]
+                    
+                    # 新しいステージの敵を生成
+                    enemies = []
+                    num_slimes = max(1, current_stage)
+                    num_chasers = max(0, current_stage - 1)
+                    num_smart = max(0, current_stage - 2)
+                    
+                    # スライム型敵の配置
+                    for _ in range(num_slimes):
+                        x = random.randint(GRID_WIDTH//2, GRID_WIDTH-2)
+                        y = random.randint(1, GRID_HEIGHT-2)
+                        enemies.append(Enemy(x, y, ENEMY_SLIME))
+                    
+                    # 追跡型敵の配置（ステージ2以降）
+                    for _ in range(num_chasers):
+                        x = random.randint(GRID_WIDTH//2, GRID_WIDTH-2)
+                        y = random.randint(GRID_HEIGHT//2, GRID_HEIGHT-2)
+                        enemies.append(Enemy(x, y, ENEMY_CHASER))
+                    
+                    # 爆弾回避型敵の配置（ステージ3以降）
+                    for _ in range(num_smart):
+                        x = random.randint(1, GRID_WIDTH-2)
+                        y = random.randint(GRID_HEIGHT//2, GRID_HEIGHT-2)
+                        enemies.append(Enemy(x, y, ENEMY_SMART))
+                    
                     game_state = "playing"
 
     if game_state == "playing":
@@ -489,7 +748,7 @@ while running:
 
         # 敵の移動
         for enemy in enemies:
-            enemy.move(game_map)
+            enemy.move(game_map, player, player.bombs)
             # プレイヤーとの衝突判定
             if player.alive and (enemy.grid_x, enemy.grid_y) == (player.grid_x, player.grid_y):
                 player.alive = False
