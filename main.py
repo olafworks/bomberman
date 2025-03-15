@@ -1,6 +1,7 @@
 import pygame
 import sys
 import random
+import math
 
 # 初期化
 pygame.init()
@@ -22,6 +23,15 @@ RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
 BLUE = (0, 0, 255)
 PURPLE = (128, 0, 128)
+# マインクラフトスタイルの色を追加
+DARK_GRAY = (64, 64, 64)
+STONE_COLOR = (120, 120, 120)
+BRICK_COLOR = (139, 69, 19)
+BRICK_LINES = (101, 51, 14)
+# 爆弾と爆発の色を追加
+BOMB_COLOR = (30, 30, 30)
+BOMB_HIGHLIGHT = (60, 60, 60)
+EXPLOSION_COLORS = [(255, 200, 0), (255, 150, 0), (255, 100, 0)]
 
 # ゲーム画面の作成
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -47,6 +57,7 @@ class Bomb:
         self.range = range
         self.exploded = False
         self.explosions = []
+        self.explosion_frames = 0  # 爆発アニメーション用
 
     def update(self):
         if not self.exploded:
@@ -55,15 +66,48 @@ class Bomb:
         return False
 
     def draw(self):
-        pygame.draw.circle(screen, RED, 
-                         (self.x * TILE_SIZE + TILE_SIZE // 2, 
-                          self.y * TILE_SIZE + TILE_SIZE // 2), 
-                         TILE_SIZE // 2)
+        if not self.exploded:
+            # 爆弾の本体
+            center_x = self.x * TILE_SIZE + TILE_SIZE // 2
+            center_y = self.y * TILE_SIZE + TILE_SIZE // 2
+            radius = TILE_SIZE // 3
+            
+            # 爆弾の本体（黒い円）
+            pygame.draw.circle(screen, BOMB_COLOR, (center_x, center_y), radius)
+            
+            # 導火線
+            fuse_start = (center_x, center_y - radius)
+            fuse_end = (center_x + radius//2, center_y - radius * 1.5)
+            pygame.draw.line(screen, BOMB_COLOR, fuse_start, fuse_end, 3)
+            
+            # ハイライト（光の反射）
+            highlight_pos = (center_x - radius//3, center_y - radius//3)
+            pygame.draw.circle(screen, BOMB_HIGHLIGHT, highlight_pos, radius//4)
+            
+            # タイマーに応じて点滅効果
+            if self.timer < 60 and self.timer % 10 < 5:  # 最後の1秒で点滅
+                pygame.draw.circle(screen, RED, (center_x, center_y), radius, 2)
+        
         # 爆発の描画
         for ex, ey in self.explosions:
-            pygame.draw.rect(screen, RED, 
-                           (ex * TILE_SIZE, ey * TILE_SIZE, TILE_SIZE, TILE_SIZE),
-                           2)
+            # 爆発の中心
+            center_x = ex * TILE_SIZE + TILE_SIZE // 2
+            center_y = ey * TILE_SIZE + TILE_SIZE // 2
+            
+            # 複数の円を重ねて爆発エフェクトを作成
+            for i, color in enumerate(EXPLOSION_COLORS):
+                size = TILE_SIZE - (i * 8)
+                offset = random.randint(-2, 2)  # ランダムなずれを加える
+                pos = (center_x + offset, center_y + offset)
+                pygame.draw.circle(screen, color, pos, size // 2)
+            
+            # 十字の光線エフェクト
+            for color in EXPLOSION_COLORS:
+                for angle in [0, 90, 180, 270]:
+                    start_pos = (center_x, center_y)
+                    end_x = center_x + math.cos(math.radians(angle)) * TILE_SIZE//2
+                    end_y = center_y + math.sin(math.radians(angle)) * TILE_SIZE//2
+                    pygame.draw.line(screen, color, start_pos, (end_x, end_y), 2)
 
 class Enemy:
     def __init__(self, x, y):
@@ -214,9 +258,37 @@ def draw_map(game_map):
         for x in range(GRID_WIDTH):
             rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
             if game_map[y][x] == WALL:
-                pygame.draw.rect(screen, GRAY, rect)
+                # 壊れないブロック（石ブロック風）
+                pygame.draw.rect(screen, STONE_COLOR, rect)
+                # 石のテクスチャを表現する線
+                pygame.draw.line(screen, DARK_GRAY, 
+                               (x * TILE_SIZE, y * TILE_SIZE), 
+                               (x * TILE_SIZE + TILE_SIZE, y * TILE_SIZE), 2)
+                pygame.draw.line(screen, DARK_GRAY, 
+                               (x * TILE_SIZE, y * TILE_SIZE), 
+                               (x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE), 2)
+                # 影の効果を追加
+                pygame.draw.line(screen, DARK_GRAY, 
+                               (x * TILE_SIZE + TILE_SIZE, y * TILE_SIZE), 
+                               (x * TILE_SIZE + TILE_SIZE, y * TILE_SIZE + TILE_SIZE), 1)
+                pygame.draw.line(screen, DARK_GRAY, 
+                               (x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE), 
+                               (x * TILE_SIZE + TILE_SIZE, y * TILE_SIZE + TILE_SIZE), 1)
+                
             elif game_map[y][x] == BLOCK:
-                pygame.draw.rect(screen, BROWN, rect)
+                # 壊れるブロック（レンガ風）
+                pygame.draw.rect(screen, BRICK_COLOR, rect)
+                # レンガのパターンを描画
+                pygame.draw.line(screen, BRICK_LINES,
+                               (x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE//2),
+                               (x * TILE_SIZE + TILE_SIZE, y * TILE_SIZE + TILE_SIZE//2), 1)
+                pygame.draw.line(screen, BRICK_LINES,
+                               (x * TILE_SIZE + TILE_SIZE//2, y * TILE_SIZE),
+                               (x * TILE_SIZE + TILE_SIZE//2, y * TILE_SIZE + TILE_SIZE), 1)
+                # 影の効果を追加
+                pygame.draw.rect(screen, BRICK_LINES, 
+                               (x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), 1)
+                
             elif game_map[y][x] == POWER_UP:
                 pygame.draw.rect(screen, RED, rect, 2)
             elif game_map[y][x] == SPEED_UP:
