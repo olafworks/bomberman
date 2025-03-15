@@ -70,13 +70,14 @@ ENEMY_SMART = 2
 MENU = 0
 GAME = 1
 GAME_OVER = 2
+STAGE_CLEAR = 3  # ステージクリア状態を追加
 
 class Bomb:
-    def __init__(self, x, y, range=2):
+    def __init__(self, x, y, explosion_range=2):
         self.x = x
         self.y = y
         self.timer = 180  # 3秒 (60FPS × 3)
-        self.range = range
+        self.explosion_range = explosion_range
         self.exploded = False
         self.explosions = []
         self.explosion_frames = 0  # 爆発アニメーション用
@@ -172,13 +173,13 @@ class Enemy:
         # 敵の種類に応じたパラメータ設定
         if enemy_type == ENEMY_SLIME:
             self.color = (0, 100, 255)  # 青色のスライム
-            self.move_delay = 40  # ゆっくり移動
+            self.move_delay = 60  # ゆっくり移動（40から60に変更）
         elif enemy_type == ENEMY_CHASER:
             self.color = (220, 50, 50)  # 赤色の追跡者
-            self.move_delay = 25  # 中程度の速さ
+            self.move_delay = 45  # 中程度の速さ（25から45に変更）
         elif enemy_type == ENEMY_SMART:
             self.color = (50, 180, 50)  # 緑色の賢い敵
-            self.move_delay = 20  # やや速い
+            self.move_delay = 35  # やや速い（20から35に変更）
         
         self.direction = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0)])
         self.bounce_offset = 0
@@ -297,20 +298,6 @@ class Enemy:
                        self.eye_size * 3, self.eye_size * 2], 
                       0, math.pi, 2)
 
-    def move(self, game_map, player=None, bombs=None):
-        if self.move_cooldown > 0:
-            self.move_cooldown -= 1
-            return
-
-        if self.enemy_type == ENEMY_SLIME:
-            self.move_slime(game_map)
-        elif self.enemy_type == ENEMY_CHASER:
-            self.move_chaser(game_map, player)
-        elif self.enemy_type == ENEMY_SMART:
-            self.move_smart(game_map, player, bombs)
-
-        self.move_cooldown = self.move_delay
-
     def move_slime(self, game_map):
         # ランダムに方向を変更する可能性
         if random.random() < 0.2:  # 20%の確率で方向転換
@@ -354,41 +341,54 @@ class Enemy:
             self.try_move(direction[0], direction[1], game_map)
 
     def move_smart(self, game_map, player, bombs):
+        # プレイヤーがいない場合や爆弾がない場合は通常の追跡
         if player is None or bombs is None or len(bombs) == 0:
             self.move_chaser(game_map, player)
             return
-            
-        # 爆弾からの逃避行動
-        for bomb in bombs:
-            # 爆発範囲内にいるかチェック
-            in_danger = False
-            bomb_range = bomb.range
-            
-            # 水平方向の爆発範囲チェック
-            if self.grid_y == bomb.y and abs(self.grid_x - bomb.x) <= bomb_range:
-                in_danger = True
-            # 垂直方向の爆発範囲チェック
-            elif self.grid_x == bomb.x and abs(self.grid_y - bomb.y) <= bomb_range:
-                in_danger = True
-                
-            if in_danger:
-                # 安全な方向に逃げる
-                safe_directions = []
-                for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
-                    new_x = self.grid_x + dx
-                    new_y = self.grid_y + dy
-                    if (0 <= new_x < GRID_WIDTH and 0 <= new_y < GRID_HEIGHT and
-                        game_map[new_y][new_x] == EMPTY and
-                        not (new_y == bomb.y and abs(new_x - bomb.x) <= bomb_range) and
-                        not (new_x == bomb.x and abs(new_y - bomb.y) <= bomb_range)):
-                        safe_directions.append((dx, dy))
-                
-                if safe_directions:
-                    dx, dy = random.choice(safe_directions)
-                    if self.try_move(dx, dy, game_map):
-                        return
         
-        # 危険がなければプレイヤーを追いかける（ChaserEnemyと同様）
+        # 爆弾の爆発範囲内にいるかチェック
+        in_danger = False
+        bomb = bombs[0]  # 最初の爆弾を参照
+        
+        # 爆弾と同じ行にいる場合
+        if self.grid_y == bomb.y and abs(self.grid_x - bomb.x) <= bomb.explosion_range:
+            in_danger = True
+        # 爆弾と同じ列にいる場合
+        elif self.grid_x == bomb.x and abs(self.grid_y - bomb.y) <= bomb.explosion_range:
+            in_danger = True
+        
+        if in_danger:
+            # 安全な方向に逃げる
+            safe_directions = []
+            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                new_x = self.grid_x + dx
+                new_y = self.grid_y + dy
+                
+                # 新しい位置が有効かチェック
+                if (0 <= new_x < len(game_map[0]) and 
+                    0 <= new_y < len(game_map) and 
+                    game_map[new_y][new_x] == EMPTY):
+                    
+                    # 新しい位置が爆発範囲内かチェック
+                    new_in_danger = False
+                    if new_y == bomb.y and abs(new_x - bomb.x) <= bomb.explosion_range:
+                        new_in_danger = True
+                    elif new_x == bomb.x and abs(new_y - bomb.y) <= bomb.explosion_range:
+                        new_in_danger = True
+                    
+                    if not new_in_danger:
+                        safe_directions.append((dx, dy))
+            
+            # 安全な方向があれば、ランダムに選択して移動
+            if safe_directions:
+                dx, dy = random.choice(safe_directions)
+                self.grid_x += dx
+                self.grid_y += dy
+                self.x = self.grid_x * TILE_SIZE
+                self.y = self.grid_y * TILE_SIZE
+                return
+        
+        # 危険がなければプレイヤーを追跡
         self.move_chaser(game_map, player)
 
     def try_move(self, dx, dy, game_map):
@@ -669,7 +669,7 @@ def check_explosion(bomb, game_map, player, enemies):
         player.alive = False
 
     for dx, dy in directions:
-        for r in range(1, bomb.range + 1):
+        for r in range(1, bomb.explosion_range + 1):
             x = bomb.x + (dx * r)
             y = bomb.y + (dy * r)
             
@@ -733,7 +733,8 @@ def main():
     game_state = MENU
     
     # ゲーム変数
-    stage = 1
+    current_stage = 1
+    max_cleared_stage = 0  # クリアした最大ステージ
     score = 0
     
     # メインループ
@@ -748,17 +749,22 @@ def main():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN:
                         # ゲーム開始
-                        game_map = create_map(stage)
+                        game_map = create_map(current_stage)
                         player = Player(TILE_SIZE, TILE_SIZE)
                         enemies = []
                         
                         # ステージに応じた敵の生成
-                        num_enemies = stage + 2
+                        num_enemies = current_stage + 2
                         for _ in range(num_enemies):
-                            enemy_type = random.randint(0, min(2, (stage - 1)))
+                            enemy_type = random.randint(0, min(2, (current_stage - 1)))
                             spawn_enemy(enemies, game_map, player, enemy_type)
                         
                         game_state = GAME
+                    # ステージ選択（クリア済みステージのみ）
+                    elif event.key == pygame.K_RIGHT and current_stage < max_cleared_stage + 1:
+                        current_stage += 1
+                    elif event.key == pygame.K_LEFT and current_stage > 1:
+                        current_stage -= 1
             
             # ゲームプレイ中の処理
             elif game_state == GAME:
@@ -773,6 +779,44 @@ def main():
             elif game_state == GAME_OVER:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN:
+                        # 同じステージを再開
+                        game_map = create_map(current_stage)
+                        player = Player(TILE_SIZE, TILE_SIZE)
+                        enemies = []
+                        
+                        # ステージに応じた敵の生成
+                        num_enemies = current_stage + 2
+                        for _ in range(num_enemies):
+                            enemy_type = random.randint(0, min(2, (current_stage - 1)))
+                            spawn_enemy(enemies, game_map, player, enemy_type)
+                        
+                        game_state = GAME
+                    elif event.key == pygame.K_ESCAPE:
+                        # メニューに戻る
+                        game_state = MENU
+            
+            # ステージクリア画面の処理
+            elif game_state == STAGE_CLEAR:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        # 次のステージへ
+                        current_stage += 1
+                        max_cleared_stage = max(max_cleared_stage, current_stage - 1)
+                        
+                        game_map = create_map(current_stage)
+                        player = Player(TILE_SIZE, TILE_SIZE)
+                        enemies = []
+                        
+                        # 新しいステージの敵を生成
+                        num_enemies = current_stage + 2
+                        for _ in range(num_enemies):
+                            enemy_type = random.randint(0, min(2, (current_stage - 1)))
+                            spawn_enemy(enemies, game_map, player, enemy_type)
+                        
+                        game_state = GAME
+                    elif event.key == pygame.K_ESCAPE:
+                        # メニューに戻る（クリアしたステージを記録）
+                        max_cleared_stage = max(max_cleared_stage, current_stage)
                         game_state = MENU
         
         # 画面クリア
@@ -780,7 +824,7 @@ def main():
         
         # メニュー画面の描画
         if game_state == MENU:
-            draw_menu()
+            draw_menu(current_stage, max_cleared_stage)
         
         # ゲームプレイ中の描画と更新
         elif game_state == GAME:
@@ -805,7 +849,10 @@ def main():
                         enemy.move_chaser(game_map, player)
                     elif enemy.enemy_type == 2:  # スマート（爆弾回避）
                         enemy.move_smart(game_map, player, player.bombs if player.alive else None)
-                enemy.move_cooldown = max(0, enemy.move_cooldown - 1)
+                    # 移動後にクールダウンをリセット
+                    enemy.move_cooldown = enemy.move_delay
+                else:
+                    enemy.move_cooldown -= 1
             
             # プレイヤーのクールダウン更新
             if player.move_cooldown > 0:
@@ -813,14 +860,17 @@ def main():
             
             # 爆弾の更新
             for bomb in player.bombs[:]:
-                bomb.update()
-                if bomb.exploded and not bomb.explosions:
-                    # 爆発の処理
-                    explosions = check_explosion(bomb, game_map, player, enemies)
-                    game_map[bomb.y][bomb.x] = EMPTY
-                # 爆発後のエフェクト表示期間が終了したら削除
-                if bomb.exploded and bomb.explosion_frames >= bomb.explosion_duration:
-                    player.bombs.remove(bomb)
+                if not bomb.exploded:
+                    if bomb.update():
+                        # 爆発の処理
+                        explosions = check_explosion(bomb, game_map, player, enemies)
+                        game_map[bomb.y][bomb.x] = EMPTY
+                else:
+                    # 爆発後の更新
+                    bomb.update()
+                    # 爆発後のエフェクト表示期間が終了したら削除
+                    if bomb.explosion_frames >= bomb.explosion_duration:
+                        player.bombs.remove(bomb)
             
             # 敵との衝突判定
             if player.alive:
@@ -832,18 +882,8 @@ def main():
             
             # すべての敵を倒したらステージクリア
             if not enemies and player.alive:
-                stage += 1
-                game_map = create_map(stage)
-                player.grid_x = 1
-                player.grid_y = 1
-                player.x = player.grid_x * TILE_SIZE
-                player.y = player.grid_y * TILE_SIZE
-                
-                # 新しいステージの敵を生成
-                num_enemies = stage + 2
-                for _ in range(num_enemies):
-                    enemy_type = random.randint(0, min(2, (stage - 1)))
-                    spawn_enemy(enemies, game_map, player, enemy_type)
+                max_cleared_stage = max(max_cleared_stage, current_stage)
+                game_state = STAGE_CLEAR
             
             # マップの描画
             draw_map(game_map)
@@ -862,7 +902,7 @@ def main():
             # スコアとステージ情報の表示
             font = pygame.font.SysFont(None, 36)
             score_text = font.render(f"Score: {player.score}", True, WHITE)
-            stage_text = font.render(f"Stage: {stage}", True, WHITE)
+            stage_text = font.render(f"Stage: {current_stage}", True, WHITE)
             screen.blit(score_text, (10, 10))
             screen.blit(stage_text, (SCREEN_WIDTH - 150, 10))
             
@@ -878,17 +918,21 @@ def main():
         elif game_state == GAME_OVER:
             draw_game_over(player.score)
         
+        # ステージクリア画面の描画
+        elif game_state == STAGE_CLEAR:
+            draw_stage_clear(current_stage)
+        
         # 画面更新
         pygame.display.flip()
         pygame.time.Clock().tick(60)
 
-def draw_menu():
+def draw_menu(current_stage, max_cleared_stage):
     # タイトル
     font_large = pygame.font.SysFont(None, 72)
     font_small = pygame.font.SysFont(None, 36)
     
-    title = font_large.render("ボンバーマン", True, WHITE)
-    instruction = font_small.render("ENTERキーでスタート", True, WHITE)
+    title = font_large.render("BOMBERMAN", True, WHITE)
+    instruction = font_small.render("Press ENTER to Start", True, WHITE)
     
     # ロボットキャラクターの表示
     robot_player = Player(SCREEN_WIDTH // 2 - TILE_SIZE // 2, SCREEN_HEIGHT // 2)
@@ -899,8 +943,17 @@ def draw_menu():
     screen.blit(instruction, (SCREEN_WIDTH // 2 - instruction.get_width() // 2, SCREEN_HEIGHT // 2 + 50))
     
     # ロボットの説明
-    robot_desc = font_small.render("ロボットキャラクターで爆弾を設置しよう！", True, BLUE)
+    robot_desc = font_small.render("Place bombs with the Robot character!", True, BLUE)
     screen.blit(robot_desc, (SCREEN_WIDTH // 2 - robot_desc.get_width() // 2, SCREEN_HEIGHT // 2 + 100))
+    
+    # ステージ選択の表示
+    stage_select = font_small.render(f"Stage: {current_stage}", True, WHITE)
+    screen.blit(stage_select, (SCREEN_WIDTH // 2 - stage_select.get_width() // 2, SCREEN_HEIGHT // 2 + 150))
+    
+    # ステージ選択の説明（クリア済みステージのみ選択可能）
+    if max_cleared_stage > 0:
+        stage_help = font_small.render("Use LEFT/RIGHT arrows to select cleared stages", True, YELLOW)
+        screen.blit(stage_help, (SCREEN_WIDTH // 2 - stage_help.get_width() // 2, SCREEN_HEIGHT // 2 + 180))
 
 def draw_game_over(score):
     # ゲームオーバー表示
@@ -909,150 +962,56 @@ def draw_game_over(score):
     
     game_over = font_large.render("GAME OVER", True, RED)
     score_text = font_small.render(f"Score: {score}", True, WHITE)
-    instruction = font_small.render("Press ENTER to Continue", True, WHITE)
+    instruction = font_small.render("Press ENTER to restart same stage", True, WHITE)
+    menu_instruction = font_small.render("Press ESC to return to menu", True, WHITE)
     
     screen.blit(game_over, (SCREEN_WIDTH // 2 - game_over.get_width() // 2, SCREEN_HEIGHT // 3))
     screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, SCREEN_HEIGHT // 2))
     screen.blit(instruction, (SCREEN_WIDTH // 2 - instruction.get_width() // 2, SCREEN_HEIGHT // 2 + 50))
+    screen.blit(menu_instruction, (SCREEN_WIDTH // 2 - menu_instruction.get_width() // 2, SCREEN_HEIGHT // 2 + 90))
 
-# ゲーム状態
-current_stage = 1
-game_map = create_map(current_stage)
-player = Player(TILE_SIZE, TILE_SIZE)
-enemies = []
-
-# 敵の生成（ステージに応じて種類と数を変更）
-num_slimes = max(1, current_stage)
-num_chasers = max(0, current_stage - 1)
-num_smart = max(0, current_stage - 2)
-
-# スライム型敵の配置
-for _ in range(num_slimes):
-    x = random.randint(GRID_WIDTH//2, GRID_WIDTH-2)
-    y = random.randint(1, GRID_HEIGHT-2)
-    enemies.append(Enemy(x, y, ENEMY_SLIME))
-
-# 追跡型敵の配置（ステージ2以降）
-for _ in range(num_chasers):
-    x = random.randint(GRID_WIDTH//2, GRID_WIDTH-2)
-    y = random.randint(GRID_HEIGHT//2, GRID_HEIGHT-2)
-    enemies.append(Enemy(x, y, ENEMY_CHASER))
-
-# 爆弾回避型敵の配置（ステージ3以降）
-for _ in range(num_smart):
-    x = random.randint(1, GRID_WIDTH-2)
-    y = random.randint(GRID_HEIGHT//2, GRID_HEIGHT-2)
-    enemies.append(Enemy(x, y, ENEMY_SMART))
-
-game_state = "playing"  # "playing", "game_over", "stage_clear"
-
-# メインゲームループ
-clock = pygame.time.Clock()
-running = True
-
-while running:
-    # イベント処理
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                if game_state == "playing" and player.alive:
-                    bomb = player.place_bomb(game_map)
-                elif game_state == "game_over":
-                    # ゲームリスタート
-                    current_stage = 1
-                    game_map = create_map(current_stage)
-                    player = Player(TILE_SIZE, TILE_SIZE)
-                    enemies = []
-                    game_state = "playing"
-                elif game_state == "stage_clear":
-                    # 次のステージへ
-                    current_stage += 1
-                    game_map = create_map(current_stage)
-                    player = Player(TILE_SIZE, TILE_SIZE)
-                    
-                    # 新しいステージの敵を生成
-                    enemies = []
-                    num_slimes = max(1, current_stage)
-                    num_chasers = max(0, current_stage - 1)
-                    num_smart = max(0, current_stage - 2)
-                    
-                    # スライム型敵の配置
-                    for _ in range(num_slimes):
-                        x = random.randint(GRID_WIDTH//2, GRID_WIDTH-2)
-                        y = random.randint(1, GRID_HEIGHT-2)
-                        enemies.append(Enemy(x, y, ENEMY_SLIME))
-                    
-                    # 追跡型敵の配置（ステージ2以降）
-                    for _ in range(num_chasers):
-                        x = random.randint(GRID_WIDTH//2, GRID_WIDTH-2)
-                        y = random.randint(GRID_HEIGHT//2, GRID_HEIGHT-2)
-                        enemies.append(Enemy(x, y, ENEMY_CHASER))
-                    
-                    # 爆弾回避型敵の配置（ステージ3以降）
-                    for _ in range(num_smart):
-                        x = random.randint(1, GRID_WIDTH-2)
-                        y = random.randint(GRID_HEIGHT//2, GRID_HEIGHT-2)
-                        enemies.append(Enemy(x, y, ENEMY_SMART))
-                    
-                    game_state = "playing"
-
-    if game_state == "playing":
-        # キー入力処理
-        keys = pygame.key.get_pressed()
-        dx = keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]
-        dy = keys[pygame.K_DOWN] - keys[pygame.K_UP]
-        player.move(dx, dy, game_map)
-
-        # 敵の移動
-        for enemy in enemies:
-            enemy.move(game_map, player, player.bombs)
-            # プレイヤーとの衝突判定
-            if player.alive and (enemy.grid_x, enemy.grid_y) == (player.grid_x, player.grid_y):
-                player.alive = False
-
-        # 爆弾の更新
-        for bomb in player.bombs[:]:
-            if not bomb.exploded:
-                if bomb.update():
-                    # 爆発の処理
-                    explosions = check_explosion(bomb, game_map, player, enemies)
-                    game_map[bomb.y][bomb.x] = EMPTY
-            else:
-                # 爆発後の更新
-                bomb.update()
-                # 爆発後のエフェクト表示期間が終了したら削除
-                if bomb.explosion_frames >= bomb.explosion_duration:
-                    player.bombs.remove(bomb)
-
-        # ゲームオーバー判定
-        if not player.alive:
-            game_state = "game_over"
-
-        # ステージクリア判定
-        if len(enemies) == 0:
-            game_state = "stage_clear"
-
-    # 画面描画
-    screen.fill(BLACK)
-    draw_map(game_map)
-    for bomb in player.bombs:
-        bomb.draw()
-    player.draw()
-    for enemy in enemies:
-        enemy.draw()
-    draw_game_info(player, current_stage)
-
-    if game_state == "game_over":
-        game_over_screen()
-    elif game_state == "stage_clear":
-        stage_clear_screen(current_stage)
+def draw_stage_clear(stage):
+    # ステージクリア表示
+    font_large = pygame.font.SysFont(None, 72)
+    font_small = pygame.font.SysFont(None, 36)
     
-    # 画面更新
-    pygame.display.flip()
-    clock.tick(60)
+    clear_text = font_large.render(f"STAGE {stage} CLEAR!", True, YELLOW)
+    instruction = font_small.render("Press ENTER for next stage", True, WHITE)
+    menu_instruction = font_small.render("Press ESC to return to menu", True, WHITE)
+    
+    screen.blit(clear_text, (SCREEN_WIDTH // 2 - clear_text.get_width() // 2, SCREEN_HEIGHT // 3))
+    screen.blit(instruction, (SCREEN_WIDTH // 2 - instruction.get_width() // 2, SCREEN_HEIGHT // 2 + 50))
+    screen.blit(menu_instruction, (SCREEN_WIDTH // 2 - menu_instruction.get_width() // 2, SCREEN_HEIGHT // 2 + 90))
 
-# ゲーム終了
-pygame.quit()
-sys.exit() 
+def spawn_enemy(enemies, game_map, player, enemy_type):
+    # プレイヤーから離れた位置に敵を配置
+    min_distance = 5  # プレイヤーからの最小距離
+    
+    for _ in range(20):  # 最大20回試行
+        x = random.randint(1, GRID_WIDTH-2)
+        y = random.randint(1, GRID_HEIGHT-2)
+        
+        # プレイヤーからの距離を計算
+        distance = abs(x - player.grid_x) + abs(y - player.grid_y)
+        
+        if distance >= min_distance and game_map[y][x] == EMPTY:
+            enemies.append(Enemy(x, y, enemy_type))
+            return True
+    
+    # 適切な位置が見つからなかった場合、ランダムな空きマスに配置
+    empty_cells = []
+    for y in range(1, GRID_HEIGHT-1):
+        for x in range(1, GRID_WIDTH-1):
+            if game_map[y][x] == EMPTY:
+                empty_cells.append((x, y))
+    
+    if empty_cells:
+        x, y = random.choice(empty_cells)
+        enemies.append(Enemy(x, y, enemy_type))
+        return True
+    
+    return False
+
+# メイン関数を呼び出す
+if __name__ == "__main__":
+    main() 
