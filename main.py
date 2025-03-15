@@ -32,6 +32,7 @@ BRICK_LINES = (101, 51, 14)
 BOMB_COLOR = (30, 30, 30)
 BOMB_HIGHLIGHT = (60, 60, 60)
 EXPLOSION_COLORS = [(255, 200, 0), (255, 150, 0), (255, 100, 0)]
+EXPLOSION_RED = (255, 0, 0)  # 爆発範囲の赤色
 # アイテムの色を追加
 POWER_UP_COLOR = (255, 50, 50)
 POWER_UP_GLOW = (255, 100, 100)
@@ -65,11 +66,18 @@ class Bomb:
         self.exploded = False
         self.explosions = []
         self.explosion_frames = 0  # 爆発アニメーション用
+        self.explosion_duration = 60  # 爆発エフェクトの持続時間（フレーム数）
+        self.explosion_alpha = 180  # 爆発の透明度（最大値）
 
     def update(self):
         if not self.exploded:
             self.timer -= 1
-            return self.timer <= 0
+            if self.timer <= 0:
+                self.exploded = True
+                return True
+        else:
+            # 爆発後のアニメーション更新
+            self.explosion_frames += 1
         return False
 
     def draw(self):
@@ -95,26 +103,47 @@ class Bomb:
             if self.timer < 60 and self.timer % 10 < 5:  # 最後の1秒で点滅
                 pygame.draw.circle(screen, RED, (center_x, center_y), radius, 2)
         
-        # 爆発の描画
-        for ex, ey in self.explosions:
-            # 爆発の中心
-            center_x = ex * TILE_SIZE + TILE_SIZE // 2
-            center_y = ey * TILE_SIZE + TILE_SIZE // 2
+        # 爆発の描画（爆発後かつエフェクト表示期間内の場合のみ）
+        elif self.exploded and self.explosion_frames < self.explosion_duration:
+            # 爆発範囲の半透明エフェクト用のサーフェス
+            # 透明度を計算（徐々にフェードアウト）
+            current_alpha = int(self.explosion_alpha * (1 - self.explosion_frames / self.explosion_duration))
+            explosion_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
             
-            # 複数の円を重ねて爆発エフェクトを作成
-            for i, color in enumerate(EXPLOSION_COLORS):
-                size = TILE_SIZE - (i * 8)
-                offset = random.randint(-2, 2)  # ランダムなずれを加える
-                pos = (center_x + offset, center_y + offset)
-                pygame.draw.circle(screen, color, pos, size // 2)
+            # 爆発範囲の各マスを描画
+            for ex, ey in self.explosions:
+                # 爆発範囲を赤色の半透明で表示
+                rect = pygame.Rect(ex * TILE_SIZE, ey * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                explosion_color = (EXPLOSION_RED[0], EXPLOSION_RED[1], EXPLOSION_RED[2], current_alpha)
+                pygame.draw.rect(explosion_surface, explosion_color, rect)
+                
+                # 爆発範囲の境界線
+                border_color = (EXPLOSION_RED[0], EXPLOSION_RED[1], EXPLOSION_RED[2], min(255, current_alpha + 50))
+                pygame.draw.rect(explosion_surface, border_color, rect, 2)
+                
+                # 爆発エフェクトは爆発開始直後のみ表示（最初の15フレーム）
+                if self.explosion_frames < 15:
+                    # 爆発の中心
+                    center_x = ex * TILE_SIZE + TILE_SIZE // 2
+                    center_y = ey * TILE_SIZE + TILE_SIZE // 2
+                    
+                    # 複数の円を重ねて爆発エフェクトを作成
+                    for i, color in enumerate(EXPLOSION_COLORS):
+                        size = TILE_SIZE - (i * 8)
+                        offset = random.randint(-2, 2)  # ランダムなずれを加える
+                        pos = (center_x + offset, center_y + offset)
+                        pygame.draw.circle(screen, color, pos, size // 2)
+                    
+                    # 十字の光線エフェクト
+                    for color in EXPLOSION_COLORS:
+                        for angle in [0, 90, 180, 270]:
+                            start_pos = (center_x, center_y)
+                            end_x = center_x + math.cos(math.radians(angle)) * TILE_SIZE//2
+                            end_y = center_y + math.sin(math.radians(angle)) * TILE_SIZE//2
+                            pygame.draw.line(screen, color, start_pos, (end_x, end_y), 2)
             
-            # 十字の光線エフェクト
-            for color in EXPLOSION_COLORS:
-                for angle in [0, 90, 180, 270]:
-                    start_pos = (center_x, center_y)
-                    end_x = center_x + math.cos(math.radians(angle)) * TILE_SIZE//2
-                    end_y = center_y + math.sin(math.radians(angle)) * TILE_SIZE//2
-                    pygame.draw.line(screen, color, start_pos, (end_x, end_y), 2)
+            # 半透明の爆発範囲を画面に描画
+            screen.blit(explosion_surface, (0, 0))
 
 class Enemy:
     def __init__(self, x, y):
@@ -367,6 +396,7 @@ def check_explosion(bomb, game_map, player, enemies):
                 if game_map[y][x] == BLOCK:
                     game_map[y][x] = EMPTY
                     player.score += 50
+                    explosions.append((x, y))  # 壊れるブロックも爆発範囲に含める
                     break
 
                 # プレイヤーの死亡判定
@@ -384,6 +414,7 @@ def check_explosion(bomb, game_map, player, enemies):
                 break
     
     bomb.explosions = explosions
+    bomb.exploded = True
     return explosions
 
 def draw_game_info(player, stage):
@@ -465,11 +496,17 @@ while running:
 
         # 爆弾の更新
         for bomb in player.bombs[:]:
-            if bomb.update():
-                # 爆発の処理
-                explosions = check_explosion(bomb, game_map, player, enemies)
-                game_map[bomb.y][bomb.x] = EMPTY
-                player.bombs.remove(bomb)
+            if not bomb.exploded:
+                if bomb.update():
+                    # 爆発の処理
+                    explosions = check_explosion(bomb, game_map, player, enemies)
+                    game_map[bomb.y][bomb.x] = EMPTY
+            else:
+                # 爆発後の更新
+                bomb.update()
+                # 爆発後のエフェクト表示期間が終了したら削除
+                if bomb.explosion_frames >= bomb.explosion_duration:
+                    player.bombs.remove(bomb)
 
         # ゲームオーバー判定
         if not player.alive:
