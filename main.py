@@ -32,6 +32,13 @@ BRICK_LINES = (101, 51, 14)
 BOMB_COLOR = (30, 30, 30)
 BOMB_HIGHLIGHT = (60, 60, 60)
 EXPLOSION_COLORS = [(255, 200, 0), (255, 150, 0), (255, 100, 0)]
+# アイテムの色を追加
+POWER_UP_COLOR = (255, 50, 50)
+POWER_UP_GLOW = (255, 100, 100)
+SPEED_UP_COLOR = (255, 215, 0)
+SPEED_UP_GLOW = (255, 235, 100)
+BOMB_UP_COLOR = (148, 0, 211)
+BOMB_UP_GLOW = (186, 85, 211)
 
 # ゲーム画面の作成
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -290,11 +297,56 @@ def draw_map(game_map):
                                (x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), 1)
                 
             elif game_map[y][x] == POWER_UP:
-                pygame.draw.rect(screen, RED, rect, 2)
+                # 火力アップアイテム（炎のデザイン）
+                center_x = x * TILE_SIZE + TILE_SIZE // 2
+                center_y = y * TILE_SIZE + TILE_SIZE // 2
+                
+                # 炎の形を描く
+                flame_points = [
+                    (center_x, center_y - TILE_SIZE//3),  # 上部
+                    (center_x + TILE_SIZE//4, center_y),  # 右
+                    (center_x, center_y + TILE_SIZE//4),  # 下
+                    (center_x - TILE_SIZE//4, center_y),  # 左
+                ]
+                pygame.draw.polygon(screen, POWER_UP_COLOR, flame_points)
+                # 内側の炎
+                small_flame_points = [
+                    (center_x, center_y - TILE_SIZE//4),
+                    (center_x + TILE_SIZE//6, center_y),
+                    (center_x, center_y + TILE_SIZE//6),
+                    (center_x - TILE_SIZE//6, center_y),
+                ]
+                pygame.draw.polygon(screen, POWER_UP_GLOW, small_flame_points)
+                
             elif game_map[y][x] == SPEED_UP:
-                pygame.draw.rect(screen, YELLOW, rect, 2)
+                # スピードアップアイテム（稲妻デザイン）
+                center_x = x * TILE_SIZE + TILE_SIZE // 2
+                center_y = y * TILE_SIZE + TILE_SIZE // 2
+                
+                # 稲妻の描画
+                lightning_points = [
+                    (center_x - TILE_SIZE//3, center_y - TILE_SIZE//3),  # 開始点
+                    (center_x, center_y - TILE_SIZE//6),                  # 第1折れ点
+                    (center_x - TILE_SIZE//6, center_y + TILE_SIZE//6),  # 第2折れ点
+                    (center_x + TILE_SIZE//3, center_y + TILE_SIZE//3)   # 終点
+                ]
+                # 稲妻の外側（輝き）
+                pygame.draw.lines(screen, SPEED_UP_GLOW, False, lightning_points, 5)
+                # 稲妻の内側（本体）
+                pygame.draw.lines(screen, SPEED_UP_COLOR, False, lightning_points, 2)
+                
             elif game_map[y][x] == BOMB_UP:
-                pygame.draw.rect(screen, PURPLE, rect, 2)
+                # ボム増加アイテム（ボムのような見た目）
+                center_x = x * TILE_SIZE + TILE_SIZE // 2
+                center_y = y * TILE_SIZE + TILE_SIZE // 2
+                # 外側の光る円
+                pygame.draw.circle(screen, BOMB_UP_GLOW, (center_x, center_y), TILE_SIZE//2 - 4)
+                # ボムの形
+                pygame.draw.circle(screen, BOMB_UP_COLOR, (center_x, center_y), TILE_SIZE//3)
+                # 導火線
+                pygame.draw.line(screen, BOMB_UP_COLOR,
+                               (center_x, center_y - TILE_SIZE//3),
+                               (center_x + TILE_SIZE//4, center_y - TILE_SIZE//2), 2)
 
 def check_explosion(bomb, game_map, player, enemies):
     directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
