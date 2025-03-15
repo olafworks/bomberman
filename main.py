@@ -429,7 +429,8 @@ class Player:
         if (0 <= new_grid_x < GRID_WIDTH and 
             0 <= new_grid_y < GRID_HEIGHT and
             game_map[new_grid_y][new_grid_x] != WALL and
-            game_map[new_grid_y][new_grid_x] != BLOCK):
+            game_map[new_grid_y][new_grid_x] != BLOCK and
+            game_map[new_grid_y][new_grid_x] != BOMB):  # 爆弾もすり抜けられないように追加
             
             self.grid_x = new_grid_x
             self.grid_y = new_grid_y
