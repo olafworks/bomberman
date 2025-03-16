@@ -22,12 +22,22 @@ try:
     item_pickup_sound = pygame.mixer.Sound("sounds/item_pickup.mp3")  # アイテム取得音を追加
     game_over_sound = pygame.mixer.Sound("sounds/game_over.mp3")  # ゲームオーバー音を追加
     stage_clear_sound = pygame.mixer.Sound("sounds/stage_clear.mp3")  # ステージクリア音を追加
+    
+    # BGM
+    menu_bgm = pygame.mixer.Sound("sounds/menu_bgm.mp3")  # メニュー画面のBGM
+    game_bgm = pygame.mixer.Sound("sounds/game_bgm.mp3")  # ゲームプレイ中のBGM
+    
     # 音量調整
     bomb_place_sound.set_volume(0.5)
-    bomb_explosion_sound.set_volume(0.9)
-    item_pickup_sound.set_volume(0.6)  # アイテム取得音の音量設定
-    game_over_sound.set_volume(0.7)  # ゲームオーバー音の音量設定
-    stage_clear_sound.set_volume(0.7)  # ステージクリア音の音量設定
+    bomb_explosion_sound.set_volume(0.5)
+    item_pickup_sound.set_volume(0.5)  # アイテム取得音の音量設定
+    game_over_sound.set_volume(0.5)  # ゲームオーバー音の音量設定
+    stage_clear_sound.set_volume(0.5)  # ステージクリア音の音量設定
+    
+    # BGMの音量は小さめに設定
+    menu_bgm.set_volume(0.5)
+    game_bgm.set_volume(0.2)
+    
     sound_enabled = True
 except:
     print("音声ファイルの読み込みに失敗しました。ゲームは音なしで続行します。")
@@ -765,6 +775,24 @@ def main():
     max_cleared_stage = 0  # クリアした最大ステージ
     score = 0
     
+    # BGM再生状態を管理する変数
+    current_bgm = None
+    
+    # BGMを再生する関数
+    def play_bgm(bgm):
+        nonlocal current_bgm
+        if sound_enabled:
+            # 現在再生中のBGMがあれば停止
+            if current_bgm is not None:
+                current_bgm.stop()
+            # 新しいBGMを再生（ループ設定）
+            bgm.play(-1)  # -1は無限ループを意味する
+            current_bgm = bgm
+    
+    # メニュー画面のBGMを再生
+    if sound_enabled:
+        play_bgm(menu_bgm)
+    
     # メインループ
     while True:
         for event in pygame.event.get():
@@ -788,6 +816,9 @@ def main():
                             spawn_enemy(enemies, game_map, player, enemy_type)
                         
                         game_state = GAME
+                        # ゲームプレイ中のBGMに切り替え
+                        if sound_enabled:
+                            play_bgm(game_bgm)
                     # ステージ選択（クリア済みステージのみ）
                     elif event.key == pygame.K_RIGHT and current_stage < max_cleared_stage + 1:
                         current_stage += 1
@@ -819,9 +850,15 @@ def main():
                             spawn_enemy(enemies, game_map, player, enemy_type)
                         
                         game_state = GAME
+                        # ゲームプレイ中のBGMに切り替え
+                        if sound_enabled:
+                            play_bgm(game_bgm)
                     elif event.key == pygame.K_ESCAPE:
                         # メニューに戻る
                         game_state = MENU
+                        # メニュー画面のBGMに切り替え
+                        if sound_enabled:
+                            play_bgm(menu_bgm)
             
             # ステージクリア画面の処理
             elif game_state == STAGE_CLEAR:
@@ -842,10 +879,16 @@ def main():
                             spawn_enemy(enemies, game_map, player, enemy_type)
                         
                         game_state = GAME
+                        # ゲームプレイ中のBGMに切り替え
+                        if sound_enabled:
+                            play_bgm(game_bgm)
                     elif event.key == pygame.K_ESCAPE:
                         # メニューに戻る（クリアしたステージを記録）
                         max_cleared_stage = max(max_cleared_stage, current_stage)
                         game_state = MENU
+                        # メニュー画面のBGMに切り替え
+                        if sound_enabled:
+                            play_bgm(menu_bgm)
         
         # 画面クリア
         screen.fill(BLACK)
@@ -897,7 +940,10 @@ def main():
                         if not player.alive:
                             game_state = GAME_OVER
                             if sound_enabled:
-                                game_over_sound.play()  # ゲームオーバー音を再生
+                                # BGMを一時停止してゲームオーバー音を再生
+                                if current_bgm is not None:
+                                    current_bgm.stop()
+                                game_over_sound.play()
                 else:
                     # 爆発後の更新
                     bomb.update()
@@ -913,7 +959,10 @@ def main():
                         player.alive = False
                         game_state = GAME_OVER
                         if sound_enabled:
-                            game_over_sound.play()  # ゲームオーバー音を再生
+                            # BGMを一時停止してゲームオーバー音を再生
+                            if current_bgm is not None:
+                                current_bgm.stop()
+                            game_over_sound.play()
                         break  # 一度死亡判定が出たらループを抜ける
             
             # すべての敵を倒したらステージクリア
@@ -921,7 +970,10 @@ def main():
                 max_cleared_stage = max(max_cleared_stage, current_stage)
                 game_state = STAGE_CLEAR
                 if sound_enabled:
-                    stage_clear_sound.play()  # ステージクリア音を再生
+                    # BGMを一時停止してステージクリア音を再生
+                    if current_bgm is not None:
+                        current_bgm.stop()
+                    stage_clear_sound.play()
             
             # マップの描画
             draw_map(game_map)
