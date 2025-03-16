@@ -883,6 +883,9 @@ def main():
                         # 爆発の処理
                         explosions = check_explosion(bomb, game_map, player, enemies)
                         game_map[bomb.y][bomb.x] = EMPTY
+                        # プレイヤーが死亡した場合はゲームオーバー状態に移行
+                        if not player.alive:
+                            game_state = GAME_OVER
                 else:
                     # 爆発後の更新
                     bomb.update()
@@ -897,6 +900,7 @@ def main():
                         player.grid_y == enemy.grid_y):
                         player.alive = False
                         game_state = GAME_OVER
+                        break  # 一度死亡判定が出たらループを抜ける
             
             # すべての敵を倒したらステージクリア
             if not enemies and player.alive:
