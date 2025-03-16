@@ -19,9 +19,11 @@ try:
     # 効果音
     bomb_place_sound = pygame.mixer.Sound("sounds/bomb_place.mp3")
     bomb_explosion_sound = pygame.mixer.Sound("sounds/explosion.mp3")
+    item_pickup_sound = pygame.mixer.Sound("sounds/item_pickup.mp3")  # アイテム取得音を追加
     # 音量調整
     bomb_place_sound.set_volume(0.5)
     bomb_explosion_sound.set_volume(0.7)
+    item_pickup_sound.set_volume(0.6)  # アイテム取得音の音量設定
     sound_enabled = True
 except:
     print("音声ファイルの読み込みに失敗しました。ゲームは音なしで続行します。")
@@ -551,6 +553,10 @@ class Player:
         elif item_type == BOMB_UP:
             self.max_bombs += 1
             self.score += 100
+        
+        # アイテム取得時に音を再生
+        if sound_enabled:
+            item_pickup_sound.play()
 
 def create_map(stage_num=1):
     game_map = [[EMPTY for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
