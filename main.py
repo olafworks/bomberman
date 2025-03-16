@@ -20,10 +20,14 @@ try:
     bomb_place_sound = pygame.mixer.Sound("sounds/bomb_place.mp3")
     bomb_explosion_sound = pygame.mixer.Sound("sounds/explosion.mp3")
     item_pickup_sound = pygame.mixer.Sound("sounds/item_pickup.mp3")  # アイテム取得音を追加
+    game_over_sound = pygame.mixer.Sound("sounds/game_over.mp3")  # ゲームオーバー音を追加
+    stage_clear_sound = pygame.mixer.Sound("sounds/stage_clear.mp3")  # ステージクリア音を追加
     # 音量調整
     bomb_place_sound.set_volume(0.5)
     bomb_explosion_sound.set_volume(0.7)
     item_pickup_sound.set_volume(0.6)  # アイテム取得音の音量設定
+    game_over_sound.set_volume(0.7)  # ゲームオーバー音の音量設定
+    stage_clear_sound.set_volume(0.7)  # ステージクリア音の音量設定
     sound_enabled = True
 except:
     print("音声ファイルの読み込みに失敗しました。ゲームは音なしで続行します。")
@@ -892,6 +896,8 @@ def main():
                         # プレイヤーが死亡した場合はゲームオーバー状態に移行
                         if not player.alive:
                             game_state = GAME_OVER
+                            if sound_enabled:
+                                game_over_sound.play()  # ゲームオーバー音を再生
                 else:
                     # 爆発後の更新
                     bomb.update()
@@ -906,12 +912,16 @@ def main():
                         player.grid_y == enemy.grid_y):
                         player.alive = False
                         game_state = GAME_OVER
+                        if sound_enabled:
+                            game_over_sound.play()  # ゲームオーバー音を再生
                         break  # 一度死亡判定が出たらループを抜ける
             
             # すべての敵を倒したらステージクリア
             if not enemies and player.alive:
                 max_cleared_stage = max(max_cleared_stage, current_stage)
                 game_state = STAGE_CLEAR
+                if sound_enabled:
+                    stage_clear_sound.play()  # ステージクリア音を再生
             
             # マップの描画
             draw_map(game_map)
