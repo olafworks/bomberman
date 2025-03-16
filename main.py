@@ -24,7 +24,7 @@ try:
     stage_clear_sound = pygame.mixer.Sound("sounds/stage_clear.mp3")  # ステージクリア音を追加
     # 音量調整
     bomb_place_sound.set_volume(0.5)
-    bomb_explosion_sound.set_volume(0.7)
+    bomb_explosion_sound.set_volume(0.9)
     item_pickup_sound.set_volume(0.6)  # アイテム取得音の音量設定
     game_over_sound.set_volume(0.7)  # ゲームオーバー音の音量設定
     stage_clear_sound.set_volume(0.7)  # ステージクリア音の音量設定
