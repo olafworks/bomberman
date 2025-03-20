@@ -2,6 +2,9 @@
 
 Pygameを使用して作成したボンバーマンゲームです。
 
+<img width="796" alt="スクリーンショット" src="https://github.com/user-attachments/assets/e1854384-118a-4adf-88f7-c9d60749e199" />
+
+
 ## 必要条件
 
 - Python 3.x
